@@ -1,0 +1,74 @@
+# ==========================================
+# Dépendances Node.js
+# ==========================================
+node_modules/
+node_modules
+.pnp
+.pnp.js
+
+# ==========================================
+# Compilation TypeScript
+# ==========================================
+dist/
+dist
+build/
+build
+*.tsbuildinfo
+
+# ==========================================
+# Secrets et variables d'environnement
+# ==========================================
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+
+# ==========================================
+# Bases de données locales et snapshots
+# ==========================================
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# ==========================================
+# Journaux d'exécution et logs
+# ==========================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================================
+# Tests et couverture de code
+# ==========================================
+coverage/
+coverage
+.nyc_output/
+
+# ==========================================
+# Caches et fichiers temporaires
+# ==========================================
+.cache/
+.temp/
+.tmp/
+
+# ==========================================
+# Fichiers systèmes et IDE
+# ==========================================
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
