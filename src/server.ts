@@ -18,12 +18,12 @@ const startServer = async () => {
   socketManager.init(httpServer);
 
   // 4. Démarrer le serveur HTTP
-  const server = httpServer.listen(env.PORT, () => {
+  const server = httpServer.listen(env.PORT, '0.0.0.0', () => {
     console.log('====================================================');
     console.log(`🚀 Serveur TONTINE Backend (MERN + Socket.IO) démarré sur le port : ${env.PORT}`);
     console.log(`🌐 Environnement : ${env.NODE_ENV}`);
     console.log(`⚡ Temps Réel Socket.IO : ACTIF`);
-    console.log(`📡 Point d'accès santé : http://localhost:${env.PORT}/api/health`);
+    console.log(`📡 Point d'accès santé : http://0.0.0.0:${env.PORT}/api/health`);
     console.log('====================================================');
 
     // Démarrer les tâches planifiées de rappels et de gestion des cycles
