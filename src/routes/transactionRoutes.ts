@@ -7,7 +7,9 @@ import {
   setTourOrderController,
   getGroupTransactionsController,
   checkTourEligibilityController,
-  completeCycleController
+  completeCycleController,
+  initiatePaymentController,
+  paymentWebhookController
 } from '../controllers/transactionController';
 import { authenticate } from '../middlewares/authMiddleware';
 import { upload } from '../middlewares/uploadMiddleware';
@@ -16,6 +18,12 @@ const router = Router();
 
 // Déclaration d'une cotisation Mobile Money avec capture facultative (RF-06)
 router.post('/declare', authenticate, upload.single('preuve'), declarePaymentController);
+
+// Session de paiement direct par API
+router.post('/initiate', authenticate, initiatePaymentController);
+
+// Webhook opérateur pour validation automatique des paiements par API
+router.post('/webhook/:provider', paymentWebhookController);
 
 // Validation d'une cotisation par l'administrateur (RF-07)
 router.post('/validate', authenticate, validatePaymentController);

@@ -195,3 +195,56 @@ export const completeCycleController = async (req: Request, res: Response, next:
     next(error);
   }
 };
+
+/**
+ * Préparer une session de paiement direct API (Wave / MTN / MoMo)
+ */
+export const initiatePaymentController = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = req.user!.id_utilisateur;
+    const { groupId, provider } = req.body;
+    const { paymentGatewayService } = await import('../services/paymentGatewayService');
+
+    const session = await paymentGatewayService.initiateDirectPayment({
+      userId,
+      groupId,
+      provider: provider || 'Wave'
+    });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: session
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Webhook de paiement automatique pour valider instantanément les cotisations
+ */
+export const paymentWebhookController = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const providerParam = (req.params.provider || 'Wave') as 'Wave' | 'MTN_Money' | 'Orange_Money' | 'MoMo';
+    const { paymentGatewayService } = await import('../services/paymentGatewayService');
+
+    // Adapter les données selon le format du webhook opérateur
+    const result = await paymentGatewayService.processPaymentWebhook({
+      provider: providerParam,
+      transactionIdOperator: req.body.transactionId || req.body.numero_tx_operateur || req.body.id || `TX_${Date.now()}`,
+      amount: Number(req.body.amount || req.body.montant || 0),
+      currency: req.body.currency || 'XOF',
+      groupId: req.body.groupId || req.body.id_groupe,
+      userId: req.body.userId || req.body.id_utilisateur,
+      status: req.body.status === 'SUCCESS' || req.body.statut === 'confirme' || req.body.state === 'successful' ? 'SUCCESS' : 'FAILED',
+      metadata: req.body
+    });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};

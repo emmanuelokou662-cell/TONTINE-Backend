@@ -1,4 +1,4 @@
-import { Transaction, GroupMember, Group, User, Notification } from '../models';
+import { Transaction, GroupMember, Group, User, Notification, Cycle } from '../models';
 import { AppError } from '../middlewares/errorHandler';
 import { ERROR_CODES, HTTP_STATUS } from '../constants/httpCodes';
 import { socketManager } from './socketManager';
@@ -41,11 +41,15 @@ export const declareContribution = async (input: DeclareContributionInput) => {
   const group = await Group.findById(member.id_groupe);
   const user = await User.findById(member.id_utilisateur);
 
+  // Sécurité : Récupérer impérativement le montant officiel fixé par le créateur de la tontine
+  const activeCycle = (await Cycle.findOne({ id_groupe: member.id_groupe, statut: 'en_cours' })) || (await Cycle.findOne({ id_groupe: member.id_groupe }).sort({ numero_cycle: -1 }));
+  const officialAmount = activeCycle ? activeCycle.montant_cotisation : input.montant;
+
   const transaction = await Transaction.create({
     id_membre_groupe: memberObjId,
     id_tour: input.id_tour ? new mongoose.Types.ObjectId(input.id_tour) : null,
     type: 'depot',
-    montant: input.montant,
+    montant: officialAmount,
     moyen_paiement: input.moyen_paiement,
     numero_tx_operateur: normalizedTx,
     preuve_capture_url: input.preuve_capture_url || null,
@@ -59,7 +63,7 @@ export const declareContribution = async (input: DeclareContributionInput) => {
       id_utilisateur: group.id_admin_principal,
       id_groupe: member.id_groupe,
       type: 'validation',
-      message: `${user.prenom} ${user.nom} a déclaré une cotisation de ${input.montant.toLocaleString('fr-FR')} FCFA (${input.moyen_paiement}).`
+      message: `${user.prenom} ${user.nom} a déclaré une cotisation de ${officialAmount.toLocaleString('fr-FR')} FCFA (${input.moyen_paiement}).`
     });
   }
 
