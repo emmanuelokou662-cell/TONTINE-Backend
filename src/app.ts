@@ -28,11 +28,12 @@ export const createApp = (): Express => {
 
       const normalizedOrigin = origin.replace(/\/+$/, '');
 
-      // Autorisation si wildcard '*' ou présent dans la liste
+      // Autorisation si wildcard '*', présent dans la liste, ou sous-domaine Vercel
       if (
         env.ALLOWED_ORIGINS_LIST.includes('*') ||
         env.ALLOWED_ORIGINS_LIST.includes(normalizedOrigin) ||
-        env.ALLOWED_ORIGINS_LIST.includes(origin)
+        env.ALLOWED_ORIGINS_LIST.includes(origin) ||
+        /^https:\/\/[a-zA-Z0-9-_.]+\.vercel\.app$/.test(normalizedOrigin)
       ) {
         return callback(null, true);
       }
