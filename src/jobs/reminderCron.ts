@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { prisma } from '../config/prisma';
+import { Tour, Cycle, Group, GroupMember, Transaction } from '../models';
 import { sendPushToUser } from '../services/pushNotificationService';
 
 /**
@@ -14,50 +14,52 @@ export const startScheduledJobs = () => {
 
     try {
       // 1. Rappels de cotisation : J-3, Jour J et J+2 (RF-17)
-      const upcomingTours = await prisma.tour.findMany({
-        where: { statut: 'en_attente' },
-        include: {
-          cycle: { include: { groupe: true } },
-          membre_groupe: {
-            include: {
-              utilisateur: true,
-              transactions: {
-                where: { statut: 'confirme', type: 'depot' }
-              }
-            }
-          }
-        }
-      });
+      const upcomingTours = await Tour.find({ statut: 'en_attente' });
 
       for (const tour of upcomingTours) {
+        const cycle = await Cycle.findById(tour.id_cycle);
+        if (!cycle) continue;
+
+        const group = await Group.findById(cycle.id_groupe);
+        if (!group) continue;
+
+        const member = await GroupMember.findById(tour.id_membre_groupe);
+        if (!member) continue;
+
         const tourDate = new Date(tour.date_prevue);
         const tourDay = new Date(tourDate.getFullYear(), tourDate.getMonth(), tourDate.getDate());
         const diffDays = Math.round((tourDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-        const totalCotise = tour.membre_groupe.transactions.reduce((acc, t) => acc + t.montant, 0);
-        const isUpToDate = totalCotise >= tour.cycle.montant_cotisation;
+        const deposits = await Transaction.find({
+          id_membre_groupe: member._id,
+          statut: 'confirme',
+          type: 'depot'
+        });
+
+        const totalCotise = deposits.reduce((acc, t) => acc + t.montant, 0);
+        const isUpToDate = totalCotise >= cycle.montant_cotisation;
 
         if (!isUpToDate) {
           // Rappel J-3 (3 jours avant l'échéance)
           if (diffDays === 3) {
-            await sendPushToUser(tour.membre_groupe.id_utilisateur, {
-              title: `Rappel Cotisation — ${tour.cycle.groupe.nom_groupe}`,
-              body: `Votre tour de cotisation approche dans 3 jours (${tour.cycle.montant_cotisation.toLocaleString('fr-FR')} FCFA).`
+            await sendPushToUser(member.id_utilisateur.toString(), {
+              title: `Rappel Cotisation — ${group.nom_groupe}`,
+              body: `Votre tour de cotisation approche dans 3 jours (${cycle.montant_cotisation.toLocaleString('fr-FR')} FCFA).`
             });
           }
 
           // Rappel Jour J (le jour de l'échéance)
           if (diffDays === 0) {
-            await sendPushToUser(tour.membre_groupe.id_utilisateur, {
-              title: `Échéance aujourd'hui — ${tour.cycle.groupe.nom_groupe}`,
+            await sendPushToUser(member.id_utilisateur.toString(), {
+              title: `Échéance aujourd'hui — ${group.nom_groupe}`,
               body: `N'oubliez pas d'effectuer votre versement Mobile Money et de le déclarer sur l'application.`
             });
           }
 
           // Relance J+2 (2 jours de retard)
           if (diffDays === -2) {
-            await sendPushToUser(tour.membre_groupe.id_utilisateur, {
-              title: `Retard de cotisation — ${tour.cycle.groupe.nom_groupe}`,
+            await sendPushToUser(member.id_utilisateur.toString(), {
+              title: `Retard de cotisation — ${group.nom_groupe}`,
               body: `Votre cotisation est en retard de 2 jours. Merci de régulariser pour éviter un signalement.`
             });
           }
@@ -65,8 +67,8 @@ export const startScheduledJobs = () => {
 
         // 2. Relance à l'administrateur en cas de retard de distribution (RF-12, J+1 après la date prévue)
         if (diffDays === -1 && tour.statut === 'en_attente') {
-          await sendPushToUser(tour.cycle.groupe.id_admin_principal, {
-            title: `Rappel Distribution — ${tour.cycle.groupe.nom_groupe}`,
+          await sendPushToUser(group.id_admin_principal.toString(), {
+            title: `Rappel Distribution — ${group.nom_groupe}`,
             body: `Le tour n°${tour.ordre_passage} était prévu hier. Veuillez confirmer le versement de la cagnotte au bénéficiaire.`
           });
         }

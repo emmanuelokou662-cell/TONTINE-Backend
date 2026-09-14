@@ -4,7 +4,7 @@ import { registerUser, loginWithPin, refreshUserSession, getUserProfile, changeP
 import { verifyOtpCode, createAndSendOtp } from '../services/otpService';
 import { HTTP_STATUS, ERROR_CODES } from '../constants/httpCodes';
 import { AppError } from '../middlewares/errorHandler';
-import { prisma } from '../config/prisma';
+import { User } from '../models';
 
 /**
  * Contrôleur d'inscription (RF-01, RF-02)
@@ -150,16 +150,17 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
       updatePayload.photo_profil_url = `/uploads/${req.file.filename}`;
     }
 
-    const updatedUser = await prisma.utilisateur.update({
-      where: { id_utilisateur: userId },
-      data: updatePayload
-    });
+    const updatedUser = await User.findByIdAndUpdate(userId, updatePayload, { new: true });
+
+    if (!updatedUser) {
+      throw new AppError('Utilisateur introuvable.', HTTP_STATUS.NOT_FOUND, ERROR_CODES.RESOURCE_NOT_FOUND);
+    }
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: 'Profil mis à jour avec succès.',
       data: {
-        id_utilisateur: updatedUser.id_utilisateur,
+        id_utilisateur: updatedUser._id.toString(),
         nom: updatedUser.nom,
         prenom: updatedUser.prenom,
         contact_paiement: updatedUser.contact_paiement,

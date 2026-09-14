@@ -1,37 +1,45 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
 import { ERROR_CODES, HTTP_STATUS } from '../constants/httpCodes';
 import { env } from '../config/env';
 
+/**
+ * Classe d'erreur personnalisée pour les erreurs métier de l'API
+ */
 export class AppError extends Error {
-  public readonly statusCode: number;
-  public readonly errorCode: string;
-  public readonly isOperational: boolean;
+  public statusCode: number;
+  public errorCode: string;
+  public isOperational: boolean;
 
-  constructor(message: string, statusCode: number = HTTP_STATUS.BAD_REQUEST, errorCode: string = ERROR_CODES.VALIDATION_ERROR) {
+  constructor(message: string, statusCode: number = HTTP_STATUS.BAD_REQUEST, errorCode: string = ERROR_CODES.INTERNAL_ERROR) {
     super(message);
     this.statusCode = statusCode;
     this.errorCode = errorCode;
     this.isOperational = true;
-    Object.setPrototypeOf(this, new.target.prototype);
+
+    Error.captureStackTrace(this, this.constructor);
   }
 }
 
 /**
- * Middleware de gestion globale des erreurs
+ * Middleware global de capture et de formatage des erreurs
  */
-export const errorHandler = (
+export const errorHandler: ErrorRequestHandler = (
   err: any,
   _req: Request,
   res: Response,
   _next: NextFunction
 ): void => {
-  // Gestion des erreurs de validation Zod
+  // Gestion des erreurs de validation Zod (RF-01, RF-06)
   if (err instanceof ZodError) {
-    const formattedErrors = err.errors.map((e) => ({
-      champ: e.path.join('.'),
-      message: e.message
-    }));
+    const formattedErrors: Record<string, string[]> = {};
+    err.errors.forEach((e) => {
+      const field = e.path.join('.') || 'general';
+      if (!formattedErrors[field]) {
+        formattedErrors[field] = [];
+      }
+      formattedErrors[field].push(e.message);
+    });
 
     res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json({
       success: false,
@@ -56,14 +64,26 @@ export const errorHandler = (
     return;
   }
 
-  // Erreurs d'unicité Prisma (P2002)
-  if (err.code === 'P2002') {
-    const targetField = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : 'champ';
+  // Erreurs d'unicité MongoDB (E11000 duplicate key error)
+  if (err.code === 11000) {
+    const keys = Object.keys(err.keyPattern || err.keyValue || {}).join(', ') || 'champ';
     res.status(HTTP_STATUS.CONFLICT).json({
       success: false,
       error: {
         code: ERROR_CODES.VALIDATION_ERROR,
-        message: `Une entrée avec cette valeur existe déjà (${targetField}).`
+        message: `Une entrée avec cette valeur existe déjà (${keys}).`
+      }
+    });
+    return;
+  }
+
+  // Erreurs de Cast Mongoose (ID invalide)
+  if (err.name === 'CastError') {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `Format d'identifiant invalide pour le champ ${err.path}.`
       }
     });
     return;
@@ -91,7 +111,7 @@ export const notFoundHandler = (req: Request, res: Response): void => {
     success: false,
     error: {
       code: ERROR_CODES.RESOURCE_NOT_FOUND,
-      message: `La ressource demandée [${req.method} ${req.originalUrl}] est introuvable.`
+      message: `Point d'accès introuvable : ${req.method} ${req.originalUrl}`
     }
   });
 };

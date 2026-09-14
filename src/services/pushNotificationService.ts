@@ -1,6 +1,7 @@
 import webpush from 'web-push';
 import { env } from '../config/env';
-import { prisma } from '../config/prisma';
+import { User, GroupMember } from '../models';
+import mongoose from 'mongoose';
 
 // Initialisation des clés VAPID standard W3C (RF-88)
 webpush.setVapidDetails(
@@ -25,11 +26,8 @@ export interface PushPayload {
  * Enregistrer ou mettre à jour la souscription Web Push d'un utilisateur
  */
 export const savePushSubscription = async (userId: string, subscription: any): Promise<void> => {
-  await prisma.utilisateur.update({
-    where: { id_utilisateur: userId },
-    data: {
-      push_subscription: JSON.stringify(subscription)
-    }
+  await User.findByIdAndUpdate(userId, {
+    push_subscription: JSON.stringify(subscription)
   });
 };
 
@@ -38,10 +36,7 @@ export const savePushSubscription = async (userId: string, subscription: any): P
  */
 export const sendPushToUser = async (userId: string, payload: PushPayload): Promise<boolean> => {
   try {
-    const user = await prisma.utilisateur.findUnique({
-      where: { id_utilisateur: userId },
-      select: { push_subscription: true }
-    });
+    const user = await User.findById(userId, 'push_subscription');
 
     if (!user || !user.push_subscription) {
       return false;
@@ -63,10 +58,7 @@ export const sendPushToUser = async (userId: string, payload: PushPayload): Prom
   } catch (error: any) {
     // Si la souscription a expiré ou a été révoquée par le navigateur (410 Gone / 404 Not Found)
     if (error.statusCode === 410 || error.statusCode === 404) {
-      await prisma.utilisateur.update({
-        where: { id_utilisateur: userId },
-        data: { push_subscription: null }
-      });
+      await User.findByIdAndUpdate(userId, { push_subscription: null });
     }
     console.warn(`Impossible d'envoyer la notification push à l'utilisateur ${userId} :`, error.message);
     return false;
@@ -81,17 +73,21 @@ export const sendPushToGroup = async (
   payload: PushPayload,
   excludeUserId?: string
 ): Promise<void> => {
-  const members = await prisma.membreGroupe.findMany({
-    where: {
-      id_groupe: groupId,
-      statut: { in: ['actif', 'suspecte'] },
-      ...(excludeUserId ? { id_utilisateur: { not: excludeUserId } } : {})
-    },
-    select: { id_utilisateur: true }
-  });
+  const groupObjId = new mongoose.Types.ObjectId(groupId);
+
+  const query: any = {
+    id_groupe: groupObjId,
+    statut: { $in: ['actif', 'suspecte'] }
+  };
+
+  if (excludeUserId) {
+    query.id_utilisateur = { $ne: new mongoose.Types.ObjectId(excludeUserId) };
+  }
+
+  const members = await GroupMember.find(query, 'id_utilisateur');
 
   const promises = members.map((m) =>
-    sendPushToUser(m.id_utilisateur, {
+    sendPushToUser(m.id_utilisateur.toString(), {
       ...payload,
       data: { ...payload.data, groupId }
     })

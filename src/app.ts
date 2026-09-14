@@ -20,12 +20,34 @@ export const createApp = (): Express => {
     crossOriginResourcePolicy: { policy: 'cross-origin' }
   }));
 
-  // 2. Configuration CORS sécurisée
+  // 2. Configuration CORS sécurisée (Supporte ALLOW_ORIGINS, localhost & production)
   app.use(cors({
-    origin: env.CORS_ORIGIN,
+    origin: (origin, callback) => {
+      // Autoriser les requêtes sans origin (applis PWA natives, requêtes serveur-à-serveur, healthcheck, curl)
+      if (!origin) return callback(null, true);
+
+      const normalizedOrigin = origin.replace(/\/+$/, '');
+
+      // Autorisation si wildcard '*' ou présent dans la liste
+      if (
+        env.ALLOWED_ORIGINS_LIST.includes('*') ||
+        env.ALLOWED_ORIGINS_LIST.includes(normalizedOrigin) ||
+        env.ALLOWED_ORIGINS_LIST.includes(origin)
+      ) {
+        return callback(null, true);
+      }
+
+      // En mode développement, autoriser automatiquement toutes les variantes de localhost
+      if (env.NODE_ENV === 'development' && /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      console.warn(`⚠️ [CORS] Origine bloquée : ${origin}. Origines configurées :`, env.ALLOWED_ORIGINS_LIST);
+      return callback(new Error(`Origine non autorisée par la politique CORS : ${origin}`));
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
   }));
 
   // 3. Limiteur de débit global

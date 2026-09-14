@@ -19,9 +19,10 @@ import {
   checkAndCompleteCycle
 } from '../services/cycleService';
 import { HTTP_STATUS } from '../constants/httpCodes';
-import { prisma } from '../config/prisma';
+import { GroupMember } from '../models';
 import { AppError } from '../middlewares/errorHandler';
 import { ERROR_CODES } from '../constants/httpCodes';
+import mongoose from 'mongoose';
 
 /**
  * Déclarer une cotisation (RF-06)
@@ -31,14 +32,13 @@ export const declarePaymentController = async (req: Request, res: Response, next
     const userId = req.user!.id_utilisateur;
     const validatedData = declarePaymentSchema.parse(req.body);
 
+    const userObjId = new mongoose.Types.ObjectId(userId);
+    const groupObjId = new mongoose.Types.ObjectId(validatedData.id_groupe);
+
     // Trouver l'adhésion membre pour ce groupe
-    const member = await prisma.membreGroupe.findUnique({
-      where: {
-        id_utilisateur_id_groupe: {
-          id_utilisateur: userId,
-          id_groupe: validatedData.id_groupe
-        }
-      }
+    const member = await GroupMember.findOne({
+      id_utilisateur: userObjId,
+      id_groupe: groupObjId
     });
 
     if (!member || member.statut === 'retire') {
@@ -48,7 +48,7 @@ export const declarePaymentController = async (req: Request, res: Response, next
     const proofUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
 
     const transaction = await declareContribution({
-      id_membre_groupe: member.id,
+      id_membre_groupe: member._id.toString(),
       id_tour: validatedData.id_tour,
       montant: validatedData.montant,
       moyen_paiement: validatedData.moyen_paiement,

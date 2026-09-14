@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { ERROR_CODES, HTTP_STATUS } from '../constants/httpCodes';
 import { JwtUserPayload, verifyAccessToken } from '../utils/security';
-import { prisma } from '../config/prisma';
+import { GroupMember } from '../models';
+import mongoose from 'mongoose';
 
 // Extension du type Request d'Express pour inclure l'utilisateur authentifié
 declare global {
@@ -76,13 +77,14 @@ export const requireGroupAdmin = async (req: Request, res: Response, next: NextF
   }
 
   try {
-    const membership = await prisma.membreGroupe.findFirst({
-      where: {
-        id_groupe: groupId,
-        id_utilisateur: req.user.id_utilisateur,
-        role: { in: ['admin_principal', 'admin_secondaire'] },
-        statut: 'actif'
-      }
+    const groupObjId = new mongoose.Types.ObjectId(groupId);
+    const userObjId = new mongoose.Types.ObjectId(req.user.id_utilisateur);
+
+    const membership = await GroupMember.findOne({
+      id_groupe: groupObjId,
+      id_utilisateur: userObjId,
+      role: { $in: ['admin_principal', 'admin_secondaire'] },
+      statut: 'actif'
     });
 
     if (!membership) {

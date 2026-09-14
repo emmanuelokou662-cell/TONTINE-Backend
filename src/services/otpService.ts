@@ -1,4 +1,4 @@
-import { prisma } from '../config/prisma';
+import { OtpCode, User } from '../models';
 import { generateSecureOtp } from '../utils/security';
 import { AppError } from '../middlewares/errorHandler';
 import { ERROR_CODES, HTTP_STATUS } from '../constants/httpCodes';
@@ -14,13 +14,11 @@ export const createAndSendOtp = async (email: string): Promise<string> => {
   const normalizedEmail = email.toLowerCase().trim();
 
   // Vérifier si un OTP récent a été envoyé il y a moins de 60 secondes (RF-03)
-  const recentOtp = await prisma.otpCode.findFirst({
-    where: {
-      email: normalizedEmail,
-      utilise: false,
-      created_at: {
-        gte: new Date(Date.now() - OTP_RESEND_COOLDOWN_SECONDS * 1000)
-      }
+  const recentOtp = await OtpCode.findOne({
+    email: normalizedEmail,
+    utilise: false,
+    created_at: {
+      $gte: new Date(Date.now() - OTP_RESEND_COOLDOWN_SECONDS * 1000)
     }
   });
 
@@ -33,25 +31,20 @@ export const createAndSendOtp = async (email: string): Promise<string> => {
   }
 
   // Invalider les anciens codes OTP non utilisés pour cet email
-  await prisma.otpCode.updateMany({
-    where: {
-      email: normalizedEmail,
-      utilise: false
-    },
-    data: { utilise: true }
-  });
+  await OtpCode.updateMany(
+    { email: normalizedEmail, utilise: false },
+    { $set: { utilise: true } }
+  );
 
   const code = generateSecureOtp();
   const expireA = new Date(Date.now() + OTP_EXPIRATION_MINUTES * 60 * 1000);
 
-  await prisma.otpCode.create({
-    data: {
-      email: normalizedEmail,
-      code,
-      expire_a: expireA,
-      tentatives: 0,
-      utilise: false
-    }
+  await OtpCode.create({
+    email: normalizedEmail,
+    code,
+    expire_a: expireA,
+    tentatives: 0,
+    utilise: false
   });
 
   // Simulation d'envoi d'email sécurisé (En production: SendGrid, Resend, Nodemailer)
@@ -66,13 +59,10 @@ export const createAndSendOtp = async (email: string): Promise<string> => {
 export const verifyOtpCode = async (email: string, code: string): Promise<boolean> => {
   const normalizedEmail = email.toLowerCase().trim();
 
-  const otpRecord = await prisma.otpCode.findFirst({
-    where: {
-      email: normalizedEmail,
-      utilise: false
-    },
-    orderBy: { created_at: 'desc' }
-  });
+  const otpRecord = await OtpCode.findOne({
+    email: normalizedEmail,
+    utilise: false
+  }).sort({ created_at: -1 });
 
   if (!otpRecord) {
     throw new AppError(
@@ -84,10 +74,7 @@ export const verifyOtpCode = async (email: string, code: string): Promise<boolea
 
   // Vérifier si le code a expiré (10 minutes)
   if (new Date() > otpRecord.expire_a) {
-    await prisma.otpCode.update({
-      where: { id: otpRecord.id },
-      data: { utilise: true }
-    });
+    await OtpCode.findByIdAndUpdate(otpRecord._id, { utilise: true });
     throw new AppError(
       'Ce code de vérification a expiré. Veuillez demander un nouveau code.',
       HTTP_STATUS.BAD_REQUEST,
@@ -97,10 +84,7 @@ export const verifyOtpCode = async (email: string, code: string): Promise<boolea
 
   // Vérifier si le nombre de tentatives maximales est atteint (3 tentatives)
   if (otpRecord.tentatives >= OTP_MAX_ATTEMPTS) {
-    await prisma.otpCode.update({
-      where: { id: otpRecord.id },
-      data: { utilise: true }
-    });
+    await OtpCode.findByIdAndUpdate(otpRecord._id, { utilise: true });
     throw new AppError(
       'Nombre maximal de tentatives atteint (3 échecs). Ce code est invalidé.',
       HTTP_STATUS.TOO_MANY_REQUESTS,
@@ -110,10 +94,7 @@ export const verifyOtpCode = async (email: string, code: string): Promise<boolea
 
   // Vérification de la concordance du code
   if (otpRecord.code !== code) {
-    await prisma.otpCode.update({
-      where: { id: otpRecord.id },
-      data: { tentatives: otpRecord.tentatives + 1 }
-    });
+    await OtpCode.findByIdAndUpdate(otpRecord._id, { $inc: { tentatives: 1 } });
     const restants = OTP_MAX_ATTEMPTS - (otpRecord.tentatives + 1);
     throw new AppError(
       `Code de vérification incorrect. Tentatives restantes : ${restants}.`,
@@ -123,16 +104,13 @@ export const verifyOtpCode = async (email: string, code: string): Promise<boolea
   }
 
   // Marquer le code comme utilisé
-  await prisma.otpCode.update({
-    where: { id: otpRecord.id },
-    data: { utilise: true }
-  });
+  await OtpCode.findByIdAndUpdate(otpRecord._id, { utilise: true });
 
   // Mettre à jour le statut email_verifie de l'utilisateur s'il existe
-  await prisma.utilisateur.updateMany({
-    where: { email: normalizedEmail },
-    data: { email_verifie: true }
-  });
+  await User.updateMany(
+    { email: normalizedEmail },
+    { $set: { email_verifie: true } }
+  );
 
   return true;
 };
