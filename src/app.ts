@@ -2,6 +2,7 @@ import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
+import fs from 'fs';
 import { env } from './config/env';
 import { generalApiLimiter } from './middlewares/rateLimiter';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
@@ -60,7 +61,18 @@ export const createApp = (): Express => {
 
   // 5. Service des fichiers statiques d'uploads (photos de profil, reçus)
   const uploadPath = path.resolve(process.cwd(), env.UPLOAD_DIR);
-  app.use('/uploads', express.static(uploadPath));
+  if (!fs.existsSync(uploadPath)) {
+    fs.mkdirSync(uploadPath, { recursive: true });
+  }
+  app.use(
+    '/uploads',
+    (_req, res, next) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      next();
+    },
+    express.static(uploadPath)
+  );
 
   // 6. Point de contrôle de santé du serveur (Health Check)
   app.get('/api/health', (_req, res) => {
