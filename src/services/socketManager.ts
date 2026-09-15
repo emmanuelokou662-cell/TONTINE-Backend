@@ -217,6 +217,17 @@ class SocketManager {
   }
 
   /**
+   * Notification en direct de la mise à jour des paramètres du groupe (périodicité, montant)
+   */
+  public broadcastGroupUpdated(groupId: string, groupData: any): void {
+    this.emitToGroup(groupId, 'group:updated', {
+      groupId,
+      group: groupData,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  /**
    * Notification en direct du retrait d'un membre
    */
   public broadcastMemberRemoved(groupId: string, memberId: string): void {

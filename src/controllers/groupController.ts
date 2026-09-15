@@ -3,13 +3,15 @@ import {
   createGroupSchema,
   joinGroupSchema,
   setSecondaryAdminSchema,
-  decideSuspectedMemberSchema
+  decideSuspectedMemberSchema,
+  updateGroupSettingsSchema
 } from '../validations/groupValidation';
 import {
   createGroup,
   joinGroupByPassword,
   getUserGroups,
-  getGroupDetails
+  getGroupDetails,
+  updateGroupSettings
 } from '../services/groupService';
 import {
   getGroupMembers,
@@ -18,6 +20,25 @@ import {
   handleSuspectedMember
 } from '../services/memberService';
 import { HTTP_STATUS } from '../constants/httpCodes';
+
+/**
+ * Mettre à jour les paramètres du groupe (périodicité, délai de retrait, montant) (RF-25)
+ */
+export const updateGroupSettingsController = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const groupId = req.params.groupId as string;
+    const validatedData = updateGroupSettingsSchema.parse(req.body);
+    const result = await updateGroupSettings(groupId, validatedData);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Paramètres du groupe mis à jour avec succès.',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 /**
  * Créer un nouveau groupe de tontine (RF-04)

@@ -7,7 +7,7 @@ export interface IGroup extends Document {
   mot_de_passe_groupe: string;
   id_admin_principal: Types.ObjectId;
   id_admin_secondaire?: Types.ObjectId | null;
-  periodicite: '1semaine' | '2semaines' | '1mois' | '2mois';
+  periodicite: '1jour' | '2jours' | '3jours' | '4jours' | '5jours' | '1semaine' | '2semaines' | '1mois' | '2mois' | '1an';
   statut: 'actif' | 'cloture';
   created_at: Date;
 }
@@ -20,7 +20,7 @@ const GroupSchema = new Schema<IGroup>(
     id_admin_secondaire: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     periodicite: {
       type: String,
-      enum: ['1semaine', '2semaines', '1mois', '2mois'],
+      enum: ['1jour', '2jours', '3jours', '4jours', '5jours', '1semaine', '2semaines', '1mois', '2mois', '1an'],
       required: true
     },
     statut: { type: String, enum: ['actif', 'cloture'], default: 'actif' }

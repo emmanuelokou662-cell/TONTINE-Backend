@@ -7,7 +7,8 @@ import {
   getGroupMembersController,
   setSecondaryAdminController,
   removeMemberController,
-  decideSuspectedMemberController
+  decideSuspectedMemberController,
+  updateGroupSettingsController
 } from '../controllers/groupController';
 import { authenticate, requireGroupAdmin } from '../middlewares/authMiddleware';
 
@@ -24,6 +25,9 @@ router.get('/my', authenticate, getMyGroupsController);
 
 // Détails d'un groupe spécifique
 router.get('/:groupId', authenticate, getGroupDetailsController);
+
+// Mettre à jour les paramètres / délais du groupe (RF-25) - Réservé aux administrateurs
+router.patch('/:groupId/settings', authenticate, requireGroupAdmin, updateGroupSettingsController);
 
 // Liste des membres d'un groupe avec leurs statuts (RF-20)
 router.get('/:groupId/members', authenticate, getGroupMembersController);

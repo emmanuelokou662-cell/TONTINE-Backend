@@ -10,9 +10,45 @@ export const MAX_GROUP_MEMBERS = 10; // Règle RF-05 : 10 membres maximum par gr
 export interface CreateGroupInput {
   nom_groupe: string;
   mot_de_passe_groupe: string;
-  periodicite: '1semaine' | '2semaines' | '1mois' | '2mois';
+  periodicite: '1jour' | '2jours' | '3jours' | '4jours' | '5jours' | '1semaine' | '2semaines' | '1mois' | '2mois' | '1an';
   montant_cotisation: number;
 }
+
+export interface UpdateGroupSettingsInput {
+  periodicite?: '1jour' | '2jours' | '3jours' | '4jours' | '5jours' | '1semaine' | '2semaines' | '1mois' | '2mois' | '1an';
+  montant_cotisation?: number;
+}
+
+/**
+ * Mettre à jour les paramètres du groupe et du cycle (RF-25)
+ */
+export const updateGroupSettings = async (groupId: string, input: UpdateGroupSettingsInput) => {
+  const group = await Group.findById(groupId);
+  if (!group) {
+    throw new AppError('Groupe introuvable.', HTTP_STATUS.NOT_FOUND, ERROR_CODES.GROUP_NOT_FOUND);
+  }
+
+  if (input.periodicite) {
+    group.periodicite = input.periodicite;
+  }
+  await group.save();
+
+  if (input.montant_cotisation) {
+    const activeCycle = await Cycle.findOne({ id_groupe: group._id, statut: 'en_cours' }).sort({ numero_cycle: -1 });
+    if (activeCycle) {
+      activeCycle.montant_cotisation = input.montant_cotisation;
+      await activeCycle.save();
+    }
+  }
+
+  socketManager.broadcastGroupUpdated(groupId, group.toJSON());
+
+  return {
+    id_groupe: group._id.toString(),
+    periodicite: group.periodicite,
+    nom_groupe: group.nom_groupe
+  };
+};
 
 /**
  * Création d'un nouveau groupe de tontine (RF-04)

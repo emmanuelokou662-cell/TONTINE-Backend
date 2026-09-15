@@ -6,10 +6,16 @@ import mongoose from 'mongoose';
 
 const getIntervalDays = (periodicite: string): number => {
   switch (periodicite) {
+    case '1jour': return 1;
+    case '2jours': return 2;
+    case '3jours': return 3;
+    case '4jours': return 4;
+    case '5jours': return 5;
     case '1semaine': return 7;
     case '2semaines': return 14;
     case '1mois': return 30;
     case '2mois': return 60;
+    case '1an': return 365;
     default: return 30;
   }
 };
